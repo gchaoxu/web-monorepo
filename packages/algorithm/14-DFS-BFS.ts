@@ -10,22 +10,22 @@
 
 // 所有遍历函数的入参都是树的根结点对象
 interface TreeNode {
-  value: number;
-  left: TreeNode | null;
-  right: TreeNode | null;
+	value: number;
+	left: TreeNode | null;
+	right: TreeNode | null;
 }
 function preorder(root: TreeNode | null) {
-  // 递归边界，root 为空
-  if (!root) {
-    return;
-  }
+	// 递归边界，root 为空
+	if (!root) {
+		return;
+	}
 
-  // 输出当前遍历的结点值
-  console.log("当前遍历的结点值是：", root.value);
-  // 递归遍历左子树
-  preorder(root.left);
-  // 递归遍历右子树
-  preorder(root.right);
+	// 输出当前遍历的结点值
+	console.log('当前遍历的结点值是：', root.value);
+	// 递归遍历左子树
+	preorder(root.left);
+	// 递归遍历右子树
+	preorder(root.right);
 }
 
 /**
@@ -34,27 +34,45 @@ function preorder(root: TreeNode | null) {
  * 2. 站在某个确定坐标的位置上，我们所观察到的可直接抵达的坐标，是需要被记录下来的，因为后续的遍历还要用到它们。
  */
 
-// 丢弃已访问的坐标、记录新观察到的坐标，这个顺序毫无疑问符合了“先进先出”的原则，因此整个 BFS 算法的实现过程，和队列有着密不可分的关系。
+// !!!丢弃已访问的坐标、记录新观察到的坐标，这个顺序毫无疑问符合了“先进先出”的原则，因此整个 BFS 算法的实现过程，和队列有着密不可分的关系。
 
 // 这里结合二叉树的层序遍历-实现 BFS 思想
+const root = {
+	val: 'A',
+	left: {
+		val: 'B',
+		left: {
+			val: 'D'
+		},
+		right: {
+			val: 'E'
+		}
+	},
+	right: {
+		val: 'C',
+		right: {
+			val: 'F'
+		}
+	}
+};
 
 function BFS(root: TreeNode) {
-  const queue: TreeNode[] = []; // 初始化队列queue
-  // 根结点首先入队
-  queue.push(root);
-  // 队列不为空，说明没有遍历完全
-  while (queue.length) {
-    const top = queue[0]; // 取出队头元素
-    // 访问 top
-    console.log(top.value);
-    // 如果左子树存在，左子树入队
-    if (top.left) {
-      queue.push(top.left);
-    }
-    // 如果右子树存在，右子树入队
-    if (top.right) {
-      queue.push(top.right);
-    }
-    queue.shift(); // 访问完毕，队头元素出队
-  }
+	const queue: TreeNode[] = []; // 初始化队列queue
+	// 根结点首先入队
+	queue.push(root);
+	// 队列不为空，说明没有遍历完全
+	while (queue.length) {
+		const top = queue[0]; // 取出队头元素
+		// 访问 top
+		console.log(top.value);
+		// 如果左子树存在，左子树入队
+		if (top.left) {
+			queue.push(top.left);
+		}
+		// 如果右子树存在，右子树入队
+		if (top.right) {
+			queue.push(top.right);
+		}
+		queue.shift(); // 访问完毕，队头元素出队
+	}
 }
