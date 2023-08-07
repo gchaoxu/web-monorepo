@@ -5,6 +5,8 @@
 	"main": "index.js",
 	"scripts": {
 		"lint": "eslint --ext .js,.ts,.jsx,.tsx --fix --quiet ./packages",
+		"start:web": "cd packages/web && pnpm dev",
+		"start:web-ts": "cd packages/web-ts && pnpm dev",
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"keywords": [],
