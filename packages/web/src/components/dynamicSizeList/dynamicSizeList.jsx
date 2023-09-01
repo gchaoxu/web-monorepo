@@ -1,24 +1,23 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import { useState } from 'react';
-
+import React, { useState } from 'react';
 // 元数据
 const measuredData = {
 	measuredDataMap: {},
-	LastMeasuredItemIndex: -1
+	lastMeasuredItemIndex: -1
 };
 
 const estimatedHeight = (defaultEstimatedItemSize = 50, itemCount) => {
 	let measuredHeight = 0;
-	const { measuredDataMap, LastMeasuredItemIndex } = measuredData;
+	const { measuredDataMap, lastMeasuredItemIndex } = measuredData;
 	// 计算已经获取过真实高度的项的高度之和
-	if (LastMeasuredItemIndex >= 0) {
-		const lastMeasuredItem = measuredDataMap[LastMeasuredItemIndex];
+	if (lastMeasuredItemIndex >= 0) {
+		const lastMeasuredItem = measuredDataMap[lastMeasuredItemIndex];
 		measuredHeight = lastMeasuredItem.offset + lastMeasuredItem.size;
 	}
 	// 未计算过真实高度的项数
 	const unMeasuredItemsCount =
-		itemCount - measuredData.LastMeasuredItemIndex - 1;
+		itemCount - measuredData.lastMeasuredItemIndex - 1;
 	// 预测总高度
 	const totalEstimatedHeight =
 		measuredHeight + unMeasuredItemsCount * defaultEstimatedItemSize;
@@ -26,24 +25,24 @@ const estimatedHeight = (defaultEstimatedItemSize = 50, itemCount) => {
 };
 
 const getItemMetaData = (props, index) => {
-	const { itemSize } = props;
-	const { measuredDataMap, LastMeasuredItemIndex } = measuredData;
+	const { itemSize, itemEstimatedSize = 50 } = props;
+	const { measuredDataMap, lastMeasuredItemIndex } = measuredData;
 	// 如果当前索引比已记录的索引要大，说明要计算当前索引的项的size和offset
-	if (index > LastMeasuredItemIndex) {
+	if (index > lastMeasuredItemIndex) {
 		let offset = 0;
 		// 计算当前能计算出来的最大offset值
-		if (LastMeasuredItemIndex >= 0) {
-			const lastMeasuredItem = measuredDataMap[LastMeasuredItemIndex];
+		if (lastMeasuredItemIndex >= 0) {
+			const lastMeasuredItem = measuredDataMap[lastMeasuredItemIndex];
 			offset += lastMeasuredItem.offset + lastMeasuredItem.size;
 		}
 		// 计算直到index为止，所有未计算过的项
-		for (let i = LastMeasuredItemIndex + 1; i <= index; i++) {
-			const currentItemSize = itemSize(i);
+		for (let i = lastMeasuredItemIndex + 1; i <= index; i++) {
+			const currentItemSize = itemSize ? itemSize(i) : itemEstimatedSize;
 			measuredDataMap[i] = { size: currentItemSize, offset };
 			offset += currentItemSize;
 		}
 		// 更新已计算的项的索引值
-		measuredData.LastMeasuredItemIndex = index;
+		measuredData.lastMeasuredItemIndex = index;
 	}
 	return measuredDataMap[index];
 };
@@ -66,7 +65,7 @@ const getEndIndex = (props, startIndex) => {
 	const startItem = getItemMetaData(props, startIndex);
 	// 可视区内最大的offset值
 	const maxOffset = startItem.offset + height;
-	// 开始项的下一项的offset，之后不断累加此offset，直到等于或超过最大offset，就是找到结束索引了
+	// 开始项的下一项的offset，之后不断累加此offset，知道等于或超过最大offset，就是找到结束索引了
 	let offset = startItem.offset + startItem.size;
 	// 结束索引
 	let endIndex = startIndex;
@@ -83,10 +82,6 @@ const getRangeToRender = (props, scrollOffset) => {
 	const { itemCount } = props;
 	const startIndex = getStartIndex(props, scrollOffset);
 	const endIndex = getEndIndex(props, startIndex);
-	/**
-	 * 前两个值是实际渲染时包括上缓存区和下缓存区的DOM索引
-	 * 后两个值是计算的原始的起始索引和结束索引
-	 * */
 	return [
 		Math.max(0, startIndex - 2),
 		Math.min(itemCount - 1, endIndex + 2),
@@ -95,24 +90,54 @@ const getRangeToRender = (props, scrollOffset) => {
 	];
 };
 
-const VariableSizeList = (props) => {
+class ListItem extends React.Component {
+	constructor(props) {
+		super(props);
+		this.domRef = React.createRef();
+		this.resizeObserver = null;
+	}
+	componentDidMount() {
+		if (this.domRef.current) {
+			const domNode = this.domRef.current.firstChild;
+			const { index, onSizeChange } = this.props;
+			this.resizeObserver = new ResizeObserver(() => {
+				onSizeChange(index, domNode);
+			});
+			this.resizeObserver.observe(domNode);
+		}
+	}
+	componentWillUnmount() {
+		if (this.resizeObserver && this.domRef.current.firstChild) {
+			this.resizeObserver.unobserve(this.domRef.current.firstChild);
+		}
+	}
+	render() {
+		const { index, style, ComponentType } = this.props;
+		return (
+			<div style={style} ref={this.domRef}>
+				<ComponentType index={index} />
+			</div>
+		);
+	}
+}
+
+const DynamicSizeList = (props) => {
 	const {
 		height,
 		width,
 		itemCount,
-		itemEstimatedSize,
+		itemEstimatedSize = 50,
 		children: Child
 	} = props;
 	const [scrollOffset, setScrollOffset] = useState(0);
+	const [, setState] = useState({});
 
 	const containerStyle = {
 		position: 'relative',
 		width,
 		height,
 		overflow: 'auto',
-		willChange: 'transform',
-		border: '1px solid #1f1f1f',
-		marginLeft: '400px'
+		willChange: 'transform'
 	};
 
 	const contentStyle = {
@@ -120,9 +145,22 @@ const VariableSizeList = (props) => {
 		width: '100%'
 	};
 
+	const sizeChangeHandle = (index, domNode) => {
+		const height = domNode.offsetHeight;
+		const { measuredDataMap, lastMeasuredItemIndex } = measuredData;
+		const itemMetaData = measuredDataMap[index];
+		itemMetaData.size = height;
+		let offset = 0;
+		for (let i = 0; i <= lastMeasuredItemIndex; i++) {
+			const itemMetaData = measuredDataMap[i];
+			itemMetaData.offset = offset;
+			offset += itemMetaData.size;
+		}
+		setState({});
+	};
+
 	const getCurrentChildren = () => {
-		const [startIndex, endIndex, originStartIndex, originEndIndex] =
-			getRangeToRender(props, scrollOffset);
+		const [startIndex, endIndex] = getRangeToRender(props, scrollOffset);
 		const items = [];
 		for (let i = startIndex; i <= endIndex; i++) {
 			const item = getItemMetaData(props, i);
@@ -132,7 +170,15 @@ const VariableSizeList = (props) => {
 				width: '100%',
 				top: item.offset
 			};
-			items.push(<Child key={i} index={i} style={itemStyle} />);
+			items.push(
+				<ListItem
+					key={i}
+					index={i}
+					style={itemStyle}
+					ComponentType={Child}
+					onSizeChange={sizeChangeHandle}
+				/>
+			);
 		}
 		return items;
 	};
@@ -149,4 +195,4 @@ const VariableSizeList = (props) => {
 	);
 };
 
-export default VariableSizeList;
+export default DynamicSizeList;
